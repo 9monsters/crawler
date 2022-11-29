@@ -2,7 +2,9 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
+	"github.com/antchfx/htmlquery"
 	"io"
 	"net/http"
 	"regexp"
@@ -25,6 +27,7 @@ func main() {
 		fmt.Println("read content failed:%v", err)
 		return
 	}
+
 	numLinks := strings.Count(string(body), "<a")
 	fmt.Printf("homepage has %d links!\n", numLinks)
 
@@ -34,6 +37,15 @@ func main() {
 	matches := headerRe.FindAllSubmatch(body, -1)
 	for _, m := range matches {
 		fmt.Println("fetch card news:", string(m[1]))
+	}
+
+	doc, err := htmlquery.Parse(bytes.NewReader(body))
+	if err != nil {
+		fmt.Println("htmlquery.Parse failed:%v", err)
+	}
+	nodes := htmlquery.Find(doc, `//div[@class="news_li"]/h2/a[@target="_blank"]`)
+	for _, node := range nodes {
+		fmt.Println("fetch card ", node.FirstChild.Data)
 	}
 }
 
