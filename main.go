@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"golang.org/x/net/html/charset"
@@ -12,6 +13,9 @@ import (
 	"golang.org/x/text/encoding/unicode"
 	"golang.org/x/text/transform"
 )
+
+// tag v0.0.5
+var headerRe = regexp.MustCompile(`<div class="news_li"[\s\S]*?<h2>[\s\S]*?<a.*?target="_blank">([\s\S]*?)</a>`)
 
 func main() {
 	url := "https://www.thepaper.cn/"
@@ -26,6 +30,11 @@ func main() {
 
 	exist := strings.Contains(string(body), "疫情")
 	fmt.Printf("是否存在疫情:%v\n", exist)
+
+	matches := headerRe.FindAllSubmatch(body, -1)
+	for _, m := range matches {
+		fmt.Println("fetch card news:", string(m[1]))
+	}
 }
 
 func Fetch(url string) ([]byte, error) {
