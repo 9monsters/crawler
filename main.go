@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"github.com/PuerkitoBio/goquery"
 	"github.com/antchfx/htmlquery"
 	"io"
 	"net/http"
@@ -47,6 +48,18 @@ func main() {
 	for _, node := range nodes {
 		fmt.Println("fetch card ", node.FirstChild.Data)
 	}
+
+	// 加载HTML文档
+	doc2, err2 := goquery.NewDocumentFromReader(bytes.NewReader(body))
+	if err2 != nil {
+		fmt.Println("read content failed:%v", err)
+	}
+	doc2.Find("div.news_li h2 a[target=_blank]").
+		Each(func(i int, s *goquery.Selection) {
+			// 获取匹配标签中的文本
+			title := s.Text()
+			fmt.Printf("Review %d: %s\n", i, title)
+		})
 }
 
 func Fetch(url string) ([]byte, error) {
