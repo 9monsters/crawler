@@ -1,0 +1,14 @@
+{
+    "configurations": [
+        {
+            "type": "go",
+            "name": "main",
+            "goExecPath": "/opt/homebrew/bin/go",
+            "buildParams": [
+                "$PROJECT_DIR$/main.go",
+            ],
+            "runParams":  []
+        },
+
+    ]
+}
