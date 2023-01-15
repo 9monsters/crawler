@@ -2,17 +2,24 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
+	"github.com/antchfx/htmlquery"
 	"golang.org/x/net/html/charset"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/unicode"
 	"golang.org/x/text/transform"
 	"io/ioutil"
 	"net/http"
+	"regexp"
+)
+
+var (
+	headerRe = regexp.MustCompile(`<div class="news_li"[\s\S]*?<h2>[\s\S]*?<a.*?target="_blank">([\s\S]*?)</a>`)
 )
 
 func main() {
-	url := "https://www.chinanews.com.cn/"
+	url := "https://www.thepaper.cn/"
 	body, err := Fetch(url)
 
 	if err != nil {
@@ -20,7 +27,15 @@ func main() {
 		return
 	}
 
-	fmt.Println(string(body))
+	doc, err := htmlquery.Parse(bytes.NewBuffer(body))
+	if err != nil {
+		fmt.Println("htmlquery.Parse failed:%v", err)
+	}
+	nodes := htmlquery.Find(doc, `//div[@class="news_li"]/h2/a[@target="_blank"]`)
+
+	for _, node := range nodes {
+		fmt.Println("fetch card", node.FirstChild.Data)
+	}
 }
 
 func Fetch(url string) ([]byte, error) {
@@ -52,5 +67,5 @@ func DeterminEncoding(r *bufio.Reader) encoding.Encoding {
 	}
 
 	e, _, _ := charset.DetermineEncoding(bytes, "")
-    return e
+	return e
 }
