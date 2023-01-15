@@ -3,6 +3,7 @@ package collect
 import (
 	"bufio"
 	"fmt"
+	"github.com/nine-monsters/crawler/proxy"
 	"golang.org/x/net/html/charset"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/unicode"
@@ -42,10 +43,17 @@ func (BaseFetch) Get(url string) ([]byte, error) {
 
 type BrowserFetch struct {
 	Timeout time.Duration
+	Proxy   proxy.ProxyFunc
 }
 
 func (b BrowserFetch) Get(url string) ([]byte, error) {
 	client := http.Client{Timeout: b.Timeout}
+	if b.Proxy != nil {
+		transport := http.DefaultTransport.(*http.Transport)
+		transport.Proxy = b.Proxy
+		client.Transport = transport
+	}
+
 	req, err := http.NewRequest("GET", url, nil)
 
 	if err != nil {
