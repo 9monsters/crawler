@@ -29,7 +29,7 @@ func main() {
 	}
 
 	// douban cookie
-	var seeds []*collect.Request
+	var seeds = make([]*collect.Request, 0, 1000)
 	for i := 0; i <= 0; i += 25 {
 		str := fmt.Sprintf("https://www.douban.com/group/szsh/discussion?start=%d", i)
 		seeds = append(seeds, &collect.Request{
@@ -46,11 +46,11 @@ func main() {
 		Proxy:   p,
 	}
 
-	s := engine.ScheduleEngine{
-		WorkCount: 5,
-		Logger:    logger,
-		Fetcher:   f,
-		Seeds:     seeds,
-	}
+	s := engine.NewSchedule(
+		engine.WithFetcher(f),
+		engine.WithLogger(logger),
+		engine.WithWorkCount(5),
+		engine.WithSeeds(seeds),
+	)
 	s.Run()
 }
