@@ -62,13 +62,13 @@ func (b BrowserFetch) Get(request *Request) ([]byte, error) {
 		fmt.Errorf("get url failed:%v", err)
 	}
 
-	if len(request.Cookie) > 0 {
-		req.Header.Set("Cookie", request.Cookie)
+	if len(request.Task.Cookie) > 0 {
+		req.Header.Set("Cookie", request.Task.Cookie)
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36")
 
 	response, err := client.Do(req)
-	time.Sleep(request.WaitTime)
+	time.Sleep(request.Task.WaitTime)
 
 	if err != nil {
 		b.Logger.Error("fetch failed",
