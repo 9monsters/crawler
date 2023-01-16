@@ -12,6 +12,7 @@ type options struct {
 	Fetcher   collect.Fetcher
 	Logger    *zap.Logger
 	Seeds     []*collect.Task
+	scheduler Scheduler
 }
 
 var defaultOptions = options{

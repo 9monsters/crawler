@@ -1,107 +1,130 @@
 package engine
 
 import (
+	"fmt"
 	"github.com/nine-monsters/crawler/collect"
 	"go.uber.org/zap"
 )
 
-type Schedule struct {
-	requestCh chan *collect.Request
-	workerCh  chan *collect.Request
-	out       chan collect.ParseResult
+type Crawler struct {
+	out chan collect.ParseResult
 	options
 }
 
-type Config struct {
-	WorkCount int
-	Fetcher   collect.Fetcher
-	Logger    *zap.Logger
-	Seeds     []*collect.Request
+type Scheduler interface {
+	Schedule()
+
+	Push(...*collect.Request)
+	Pull() *collect.Request
 }
 
-func NewSchedule(opts ...Option) *Schedule {
+type Schedule struct {
+	requestCh chan *collect.Request
+	workerCh  chan *collect.Request
+	reqQueue  []*collect.Request
+	Logger    *zap.Logger
+}
+
+func NewEngine(opts ...Option) *Crawler {
 	options := defaultOptions
 	for _, opt := range opts {
 		opt(&options)
 	}
-	s := &Schedule{}
-	s.options = options
-	return s
+	e := &Crawler{}
+	out := make(chan collect.ParseResult)
+	e.out = out
+	e.options = options
+	return e
 }
 
-func (s *Schedule) Run() {
-	requestCh := make(chan *collect.Request)
-	workerCh := make(chan *collect.Request)
-	out := make(chan collect.ParseResult)
-	s.requestCh = requestCh
-	s.workerCh = workerCh
-	s.out = out
-	go s.Schedule()
-	for i := 0; i < s.WorkCount; i++ {
-		go s.CreateWork()
+func (e *Crawler) Run() {
+	go e.Schedule()
+
+	for i := 0; i < e.WorkCount; i++ {
+		go e.CreateWork()
 	}
-	s.HandleResult()
+	e.HandleResult()
+}
+
+func (s *Schedule) Push(reqs ...*collect.Request) {
+	for _, req := range reqs {
+		s.requestCh <- req
+	}
+}
+
+func (s *Schedule) Pull() *collect.Request {
+	r := <-s.requestCh
+	return r
 }
 
 func (s *Schedule) Schedule() {
-	var reqQueue = s.Seeds
-	go func() {
-		for {
-			var req *collect.Request
-			var ch chan *collect.Request
+	for {
+		var req *collect.Request
+		var ch chan *collect.Request
 
-			if len(reqQueue) > 0 {
-				req = reqQueue[0]
-				reqQueue = reqQueue[1:]
-				ch = s.workerCh
-			}
-			select {
-			case r := <-s.requestCh:
-				reqQueue = append(reqQueue, r)
-
-			case ch <- req:
-			}
+		if len(s.reqQueue) > 0 {
+			req = s.reqQueue[0]
+			s.reqQueue = s.reqQueue[1:]
+			ch = s.workerCh
 		}
-	}()
+		select {
+		case r := <-s.requestCh:
+			s.reqQueue = append(s.reqQueue, r)
+
+		case ch <- req:
+			fmt.Println(123)
+		}
+	}
 }
 
-func (s *Schedule) CreateWork() {
+func (e *Crawler) Schedule() {
+	var reqs []*collect.Request
+	for _, seed := range e.Seeds {
+		seed.RootReq.Task = seed
+		seed.RootReq.Url = seed.Url
+		reqs = append(reqs, seed.RootReq)
+	}
+	go e.scheduler.Schedule()
+	go e.scheduler.Push(reqs...)
+}
+
+func (e *Crawler) CreateWork() {
 	for {
-		r := <-s.workerCh
+		r := e.scheduler.Pull()
 		if err := r.Check(); err != nil {
-			s.Logger.Error("check failed", zap.Error(err))
+			e.Logger.Error("check failed", zap.Error(err))
 			continue
 		}
-		body, err := s.Fetcher.Get(r)
+		body, err := r.Task.Fetcher.Get(r)
 		if len(body) < 6000 {
-			s.Logger.Error("can't fetch ",
+			e.Logger.Error("can't fetch ",
 				zap.Int("length", len(body)),
 				zap.String("url", r.Url),
 			)
 			continue
 		}
 		if err != nil {
-			s.Logger.Error("can't fetch ",
+			e.Logger.Error("can't fetch ",
 				zap.Error(err),
 				zap.String("url", r.Url),
 			)
 			continue
 		}
 		result := r.ParseFunc(body, r)
-		s.out <- result
+		if len(result.Requests) > 0 {
+			go e.scheduler.Push(result.Requests...)
+		}
+		e.out <- result
 	}
 }
 
-func (s *Schedule) HandleResult() {
+func (e *Crawler) HandleResult() {
 	for {
 		select {
-		case result := <-s.out:
-			for _, req := range result.Requests {
-				s.requestCh <- req
-			}
+		case result := <-e.out:
 			for _, item := range result.Items {
 				// todo: store
-				s.Logger.Sugar().Info("get result：", item)
+				e.Logger.Sugar().Info("get result：", item)
 			}
 		}
 	}
