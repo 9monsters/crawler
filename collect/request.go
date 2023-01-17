@@ -12,6 +12,7 @@ type Task struct {
 	Url         string
 	Cookie      string
 	WaitTime    time.Duration
+	Reload      bool
 	MaxDepth    int
 	Visited     map[string]bool
 	VisitedLock sync.Mutex
