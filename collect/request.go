@@ -20,6 +20,11 @@ type Task struct {
 	Fetcher     Fetcher
 }
 
+type Context struct {
+	Body []byte
+	Req  *Request
+}
+
 type Request struct {
 	unique    string
 	Task      *Task
