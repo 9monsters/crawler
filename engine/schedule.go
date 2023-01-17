@@ -2,9 +2,25 @@ package engine
 
 import (
 	"github.com/nine-monsters/crawler/collect"
+	"github.com/nine-monsters/crawler/parse/douban_group"
 	"go.uber.org/zap"
 	"sync"
 )
+
+// 全局蜘蛛种类实例
+var Store = &CrawlerStore{
+	list: []*collect.Task{},
+	hash: map[string]*collect.Task{},
+}
+
+type CrawlerStore struct {
+	list []*collect.Task
+	hash map[string]*collect.Task
+}
+
+func init() {
+	Store.Add(douban_group.DoubangroupTask)
+}
 
 type Crawler struct {
 	out         chan collect.ParseResult
@@ -14,6 +30,11 @@ type Crawler struct {
 	failureLock sync.Mutex
 
 	options
+}
+
+func (c *CrawlerStore) Add(task *collect.Task) {
+	c.hash[task.Name] = task
+	c.list = append(c.list, task)
 }
 
 type Scheduler interface {
@@ -96,9 +117,13 @@ func (s *Schedule) Schedule() {
 func (e *Crawler) Schedule() {
 	var reqs []*collect.Request
 	for _, seed := range e.Seeds {
-		seed.RootReq.Task = seed
-		seed.RootReq.Url = seed.Url
-		reqs = append(reqs, seed.RootReq)
+		task := Store.hash[seed.Name]
+		task.Fetcher = seed.Fetcher
+		rootreqs := task.Rule.Root()
+		for _, req := range rootreqs {
+			req.Task = task
+		}
+		reqs = append(reqs, rootreqs...)
 	}
 	go e.scheduler.Schedule()
 	go e.scheduler.Push(reqs...)
@@ -106,37 +131,42 @@ func (e *Crawler) Schedule() {
 
 func (e *Crawler) CreateWork() {
 	for {
-		r := e.scheduler.Pull()
-		if err := r.Check(); err != nil {
+		req := e.scheduler.Pull()
+		if err := req.Check(); err != nil {
 			e.Logger.Error("check failed", zap.Error(err))
 			continue
 		}
 
-		if !r.Task.Reload && e.HasVisited(r) {
+		if !req.Task.Reload && e.HasVisited(req) {
 			e.Logger.Debug("request has visited",
-				zap.String("url:", r.Url),
+				zap.String("url:", req.Url),
 			)
 			continue
 		}
-		e.StoreVisited(r)
+		e.StoreVisited(req)
 
-		body, err := r.Task.Fetcher.Get(r)
+		body, err := req.Task.Fetcher.Get(req)
 		if err != nil {
 			e.Logger.Error("can't fetch ",
 				zap.Error(err),
-				zap.String("url", r.Url),
+				zap.String("url", req.Url),
 			)
 			continue
 		}
 		if len(body) < 6000 {
 			e.Logger.Error("can't fetch ",
 				zap.Int("length", len(body)),
-				zap.String("url", r.Url),
+				zap.String("url", req.Url),
 			)
-			e.SetFailure(r)
+			e.SetFailure(req)
 			continue
 		}
-		result := r.ParseFunc(body, r)
+		rule := req.Task.Rule.Trunk[req.RuleName]
+
+		result := rule.ParseFunc(&collect.Context{
+			body,
+			req,
+		})
 		if len(result.Requests) > 0 {
 			go e.scheduler.Push(result.Requests...)
 		}

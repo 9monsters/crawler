@@ -9,6 +9,7 @@ import (
 )
 
 type Task struct {
+	Name        string
 	Url         string
 	Cookie      string
 	WaitTime    time.Duration
@@ -16,8 +17,8 @@ type Task struct {
 	MaxDepth    int
 	Visited     map[string]bool
 	VisitedLock sync.Mutex
-	RootReq     *Request
 	Fetcher     Fetcher
+	Rule        RuleTree
 }
 
 type Context struct {
@@ -26,13 +27,13 @@ type Context struct {
 }
 
 type Request struct {
-	unique    string
-	Task      *Task
-	Url       string
-	Method    string
-	Depth     int
-	Priority  int
-	ParseFunc func([]byte, *Request) ParseResult
+	unique   string
+	Task     *Task
+	Url      string
+	Method   string
+	Depth    int
+	Priority int
+	RuleName string
 }
 
 type ParseResult struct {
